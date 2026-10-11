@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pulsar Rhythm Generator — Freeform</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; overflow: hidden; background: #000; color: white; user-select: none; }
+    #canvas { position: absolute; top: 0; left: 0; cursor: crosshair; touch-action: none; }
+
+    .floating-menu {
+        position: absolute; background: rgba(20,20,40,0.95);
+        border: 2px solid rgba(100,150,255,0.5); border-radius: 10px;
+        padding: 10px; display: none; z-index: 1000;
+        box-shadow: 0 0 20px rgba(100,150,255,0.3); max-width: 220px;
+    }
+    .menu-title { font-size: 14px; margin-bottom: 10px; color: #88aaff; text-align: center; font-weight: bold; }
+    .pulsar-option {
+        padding: 10px 12px; margin: 5px 0;
+        background: linear-gradient(135deg, rgba(50,50,100,0.8), rgba(30,30,60,0.8));
+        border: 1px solid rgba(100,150,255,0.3); border-radius: 5px;
+        cursor: pointer; transition: all 0.2s; font-size: 13px;
+    }
+    .pulsar-option:hover { background: linear-gradient(135deg, rgba(70,70,150,0.9), rgba(50,50,100,0.9)); border-color: rgba(150,200,255,0.6); }
+
+    .popup {
+        position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+        background: linear-gradient(135deg, rgba(20,20,50,0.98), rgba(10,10,30,0.98));
+        border: 2px solid rgba(100,150,255,0.5); border-radius: 15px;
+        padding: 25px; display: none; z-index: 2000;
+        box-shadow: 0 0 30px rgba(100,150,255,0.4); min-width: 280px;
+    }
+    .popup h3 { margin-bottom: 15px; color: #aaccff; }
+    .popup label { font-size: 13px; color: #ccd; }
+    .popup input[type=number] {
+        width: 100%; padding: 8px; margin: 6px 0 14px 0;
+        background: rgba(50,50,100,0.5); border: 1px solid rgba(100,150,255,0.5);
+        border-radius: 5px; color: white; font-size: 14px;
+    }
+    .popup input[type=range] { width: 100%; margin: 6px 0 14px 0; }
+    .popup-buttons { display: flex; gap: 10px; margin-top: 5px; }
+    .popup button {
+        flex: 1; padding: 10px; background: linear-gradient(135deg, rgba(50,100,200,0.8), rgba(30,60,150,0.8));
+        border: none; border-radius: 5px; color: white; cursor: pointer; transition: all 0.2s;
+    }
+    .popup button:hover { background: linear-gradient(135deg, rgba(70,120,220,0.9), rgba(50,80,170,0.9)); }
+
+    .quick-popup {
+        position: fixed; background: rgba(15,15,35,0.97);
+        border: 1px solid rgba(120,170,255,0.5); border-radius: 8px;
+        padding: 10px 12px; z-index: 1500; display: none; width: 160px;
+        box-shadow: 0 0 15px rgba(100,150,255,0.35);
+    }
+    .quick-popup .qp-title { font-size: 11px; color: #9ab; margin-bottom: 6px; text-align: center; }
+    .quick-popup input[type=range] { width: 100%; }
+
+    .controls {
+        position: fixed; top: 20px; right: 20px; background: rgba(20,20,40,0.9);
+        padding: 15px; border-radius: 10px; border: 1px solid rgba(100,150,255,0.3);
+        z-index: 100; display: flex; flex-direction: column; gap: 6px; max-width: 160px;
+    }
+    .control-btn {
+        padding: 9px 14px; background: linear-gradient(135deg, rgba(50,50,100,0.8), rgba(30,30,60,0.8));
+        border: 1px solid rgba(100,150,255,0.3); border-radius: 5px; color: white;
+        cursor: pointer; transition: all 0.2s; font-size: 13px;
+    }
+    .control-btn:hover { background: linear-gradient(135deg, rgba(70,70,150,0.9), rgba(50,50,100,0.9)); }
+
+    .info {
+        position: fixed; bottom: 20px; left: 20px; background: rgba(20,20,40,0.9);
+        padding: 15px; border-radius: 10px; border: 1px solid rgba(100,150,255,0.3);
+        font-size: 12px; max-width: 320px;
+    }
+    .info h4 { color: #88aaff; margin-bottom: 10px; }
+    .info p { margin: 5px 0; color: #aaa; }
+
+    .toast {
+        position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+        background: rgba(30,50,30,0.95); border: 1px solid rgba(100,255,150,0.4);
+        padding: 10px 20px; border-radius: 8px; font-size: 13px; z-index: 3000; display: none;
+    }
+</style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div class="toast" id="toast"></div>
+
+    <div class="floating-menu" id="pulsarMenu">
+        <div class="menu-title">Select Pulsar Type</div>
+        <div class="pulsar-option" data-type="neutron">Neutron Star</div>
+        <div class="pulsar-option" data-type="millisecond">Millisecond Pulsar</div>
+        <div class="pulsar-option" data-type="magnetar">Magnetar</div>
+        <div class="pulsar-option" data-type="binary">Binary Pulsar</div>
+        <div class="pulsar-option" data-type="xray">X-Ray Pulsar</div>
+        <div class="pulsar-option" data-type="atoll">Atoll (X-ray binary)</div>
+        <div class="pulsar-option" data-type="banana">Banana (X-ray binary)</div>
+    </div>
+
+    <div class="quick-popup" id="quickPopup">
+        <div class="qp-title">Intensity</div>
+        <input type="range" id="quickVolume" min="-40" max="0" step="1" value="-10">
+    </div>
+
+    <div class="popup" id="editPopup">
+        <h3>Edit Pulsar</h3>
+        <label>Frequency (Hz)</label>
+        <input type="number" id="frequencyInput" min="20" max="2000" step="1" value="440">
+        <label>Repetitions per minute</label>
+        <input type="number" id="repetitionInput" min="1" max="240" step="1" value="60">
+        <label>Volume (dB)</label>
+        <input type="range" id="volumeInput" min="-40" max="0" step="1" value="-10">
+        <div class="popup-buttons">
+            <button onclick="saveEdit()">Save</button>
+            <button onclick="closePopup()">Cancel</button>
+            <button onclick="deletePulsar()" style="background: linear-gradient(135deg, rgba(200,50,50,0.8), rgba(150,30,30,0.8));">Delete</button>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="control-btn" onclick="saveProject()">💾 Save Project</button>
+        <button class="control-btn" onclick="loadProject()">📂 Load Project</button>
+        <button class="control-btn" onclick="openProjectFile()">📄 Open File</button>
+        <button class="control-btn" onclick="exportImage()">🖼️ Export PNG</button>
+        <button class="control-btn" onclick="clearAll()">🗑️ Clear All</button>
+        <button class="control-btn" onclick="toggleMute()">🔇 Mute/Unmute</button>
+    </div>
+
+    <div class="info">
+        <h4>Instructions:</h4>
+        <p>• Click empty space to choose & place a pulsar</p>
+        <p>• Drag a placed pulsar to reposition it</p>
+        <p>• Hold a pulsar 2+ seconds for a quick volume slider</p>
+        <p>• Double-click a pulsar for full editing (pitch, rhythm, volume)</p>
+        <p>• Save Project stores your layout; Load brings it back anytime</p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const menu = document.getElementById('pulsarMenu');
+        const popup = document.getElementById('editPopup');
+        const quickPopup = document.getElementById('quickPopup');
+        const toast = document.getElementById('toast');
+
+        let pulsars = [];
+        let stars = [];
+        let selectedType = null;
+        let editingPulsar = null;
+        let placementMode = false;
+        let muted = false;
+        let interaction = null; // { pulsar, startX, startY, moved, dragging, longPressTimer, longPressTriggered }
+
+        const pulsarTypes = {
+            neutron:     { label: 'Neutron Star',        colors: ['rgba(100,150,255,',  'rgba(50,100,200,']  },
+            millisecond: { label: 'Millisecond Pulsar',  colors: ['rgba(255,100,255,',  'rgba(200,50,200,']  },
+            magnetar:    { label: 'Magnetar',             colors: ['rgba(255,200,100,',  'rgba(200,150,50,']  },
+            binary:      { label: 'Binary Pulsar',        colors: ['rgba(100,255,200,',  'rgba(50,200,150,']  },
+            xray:        { label: 'X-Ray Pulsar',         colors: ['rgba(255,100,100,',  'rgba(200,50,50,']   },
+            atoll:       { label: 'Atoll (X-ray binary)', colors: ['rgba(80,230,210,',   'rgba(30,180,160,']  },
+            banana:      { label: 'Banana (X-ray binary)',colors: ['rgba(255,225,90,',   'rgba(210,175,40,']  }
+        };
+        const defaultFreq = { neutron: 220, millisecond: 880, magnetar: 110, binary: 440, xray: 660, atoll: 330, banana: 550 };
+
+        function showToast(msg) {
+            toast.textContent = msg;
+            toast.style.display = 'block';
+            clearTimeout(showToast._t);
+            showToast._t = setTimeout(() => { toast.style.display = 'none'; }, 2800);
+        }
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            initStars();
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function initStars() {
+            stars = [];
+            for (let i = 0; i < 200; i++) {
+                stars.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, size: Math.random() * 2, brightness: Math.random() });
+            }
+        }
+
+        class Pulsar {
+            constructor(x, y, type, freq, reps, vol) {
+                this.x = x; this.y = y; this.type = type;
+                this.radius = 20; this.pulseRadius = 20;
+                this.frequency = freq || defaultFreq[type];
+                this.repetitions = reps || 60;
+                this.volume = (vol !== undefined) ? vol : -10;
+                this.synth = this.createSynth(type);
+                this.synth.volume.value = this.volume;
+                this.loop = null;
+                this.glowIntensity = 0;
+                this.rotation = 0;
+                this.startLoop();
+            }
+            createSynth(type) {
+                let synth;
+                switch (type) {
+                    case 'neutron': synth = new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.3, release: 0.2 } }).toDestination(); break;
+                    case 'millisecond': synth = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.001, decay: 0.05, sustain: 0.1, release: 0.1 } }).toDestination(); break;
+                    case 'magnetar': synth = new Tone.Synth({ oscillator: { type: 'sawtooth' }, envelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 0.3 } }).toDestination(); break;
+                    case 'binary': synth = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'square' }, envelope: { attack: 0.02, decay: 0.1, sustain: 0.3, release: 0.2 } }).toDestination(); break;
+                    case 'xray': synth = new Tone.FMSynth({ envelope: { attack: 0.01, decay: 0.1, sustain: 0.2, release: 0.15 } }).toDestination(); break;
+                    case 'atoll': synth = new Tone.AMSynth({ envelope: { attack: 0.02, decay: 0.15, sustain: 0.2, release: 0.2 } }).toDestination(); break;
+                    case 'banana': synth = new Tone.MembraneSynth({ envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.15 } }).toDestination(); break;
+                    default: synth = new Tone.Synth().toDestination();
+                }
+                return synth;
+            }
+            triggerSound(time) {
+                if (muted) { this.glowIntensity = 1; return; }
+                if (this.type === 'binary') this.synth.triggerAttackRelease([this.frequency, this.frequency * 1.5], '8n', time);
+                else this.synth.triggerAttackRelease(this.frequency, '8n', time);
+                this.glowIntensity = 1;
+            }
+            startLoop() {
+                if (this.loop) this.loop.stop();
+                const interval = 60 / this.repetitions;
+                this.loop = new Tone.Loop((time) => this.triggerSound(time), interval).start(0);
+            }
+            updateSettings(freq, reps, vol) {
+                this.frequency = freq;
+                this.repetitions = reps;
+                this.volume = vol;
+                this.synth.volume.value = vol;
+                this.startLoop();
+            }
+            draw() {
+                ctx.save();
+                this.pulseRadius = 20 + Math.sin(Date.now() * 0.002) * 5;
+                this.rotation += 0.01;
+                if (this.glowIntensity > 0) this.glowIntensity -= 0.02;
+
+                const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.pulseRadius * 2);
+                const [innerColor, outerColor] = pulsarTypes[this.type].colors;
+                gradient.addColorStop(0, innerColor + (0.8 + this.glowIntensity * 0.2) + ')');
+                gradient.addColorStop(0.5, innerColor + (0.4 + this.glowIntensity * 0.1) + ')');
+                gradient.addColorStop(1, outerColor + '0)');
+                ctx.fillStyle = gradient;
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.pulseRadius * 2, 0, Math.PI * 2); ctx.fill();
+
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                ctx.strokeStyle = innerColor + '0.6)';
+                ctx.lineWidth = 2;
+                for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(this.pulseRadius*1.5,0); ctx.stroke(); ctx.rotate(Math.PI/2); }
+                ctx.restore();
+
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2); ctx.fillStyle = innerColor + '1)'; ctx.fill();
+                ctx.fillStyle = 'white'; ctx.font = '10px Arial'; ctx.textAlign = 'center';
+                ctx.fillText(pulsarTypes[this.type].label.toUpperCase(), this.x, this.y + this.radius + 15);
+            }
+            contains(x, y) {
+                const dx = x - this.x, dy = y - this.y;
+                return dx*dx + dy*dy <= this.radius * this.radius;
+            }
+            destroy() {
+                if (this.loop) { this.loop.stop(); this.loop.dispose(); }
+                if (this.synth) this.synth.dispose();
+            }
+        }
+
+        async function startAudio() {
+            // Resume the audio context if the browser suspended it
+            if (Tone.context.state !== 'running') { await Tone.start(); }
+            // Always make sure the master clock is running, otherwise loops never fire
+            if (Tone.Transport.state !== 'started') { Tone.Transport.start(); }
+        }
+
+        function findPulsarAt(x, y) {
+            for (let i = pulsars.length - 1; i >= 0; i--) if (pulsars[i].contains(x, y)) return pulsars[i];
+            return null;
+        }
+
+        // ---- Pointer interaction: click / drag / long-press ----
+        canvas.addEventListener('pointerdown', async (e) => {
+            await startAudio();
+            const hit = findPulsarAt(e.clientX, e.clientY);
+
+            if (hit) {
+                interaction = { pulsar: hit, startX: e.clientX, startY: e.clientY, moved: false, dragging: false, longPressTriggered: false };
+                canvas.setPointerCapture(e.pointerId);
+                interaction.longPressTimer = setTimeout(() => {
+                    if (interaction && !interaction.moved) {
+                        interaction.longPressTriggered = true;
+                        openQuickPopup(interaction.pulsar, e.clientX, e.clientY);
+                    }
+                }, 2000);
+                return;
+            }
+
+            if (placementMode && selectedType) {
+                const p = new Pulsar(e.clientX, e.clientY, selectedType);
+                pulsars.push(p);
+                placementMode = false; selectedType = null;
+                menu.style.display = 'none';
+            } else {
+                menu.style.left = Math.min(e.clientX, window.innerWidth - 240) + 'px';
+                menu.style.top = Math.min(e.clientY, window.innerHeight - 380) + 'px';
+                menu.style.display = 'block';
+            }
+        });
+
+        canvas.addEventListener('pointermove', (e) => {
+            if (!interaction) return;
+            const dx = e.clientX - interaction.startX, dy = e.clientY - interaction.startY;
+            if (!interaction.moved && Math.hypot(dx, dy) > 6) {
+                interaction.moved = true;
+                interaction.dragging = true;
+                clearTimeout(interaction.longPressTimer);
+                hideQuickPopup();
+            }
+            if (interaction.dragging) {
+                interaction.pulsar.x = e.clientX;
+                interaction.pulsar.y = e.clientY;
+            }
+        });
+
+        canvas.addEventListener('pointerup', () => {
+            if (interaction) clearTimeout(interaction.longPressTimer);
+            interaction = null;
+        });
+
+        canvas.addEventListener('dblclick', (e) => {
+            const hit = findPulsarAt(e.clientX, e.clientY);
+            if (hit) {
+                editingPulsar = hit;
+                document.getElementById('frequencyInput').value = hit.frequency;
+                document.getElementById('repetitionInput').value = hit.repetitions;
+                document.getElementById('volumeInput').value = hit.volume;
+                popup.style.display = 'block';
+            }
+        });
+
+        document.querySelectorAll('.pulsar-option').forEach(option => {
+            option.addEventListener('click', () => {
+                selectedType = option.dataset.type;
+                placementMode = true;
+                menu.style.display = 'none';
+            });
+        });
+
+        document.addEventListener('pointerdown', (e) => {
+            if (!menu.contains(e.target) && e.target !== canvas && !placementMode) menu.style.display = 'none';
+            if (!quickPopup.contains(e.target) && e.target !== canvas) hideQuickPopup();
+        });
+
+        // ---- Quick long-press volume popup ----
+        let quickTarget = null;
+        function openQuickPopup(pulsar, x, y) {
+            quickTarget = pulsar;
+            document.getElementById('quickVolume').value = pulsar.volume;
+            quickPopup.style.left = Math.min(x, window.innerWidth - 180) + 'px';
+            quickPopup.style.top = Math.max(y - 70, 10) + 'px';
+            quickPopup.style.display = 'block';
+        }
+        function hideQuickPopup() { quickPopup.style.display = 'none'; quickTarget = null; }
+        document.getElementById('quickVolume').addEventListener('input', (e) => {
+            if (quickTarget) { quickTarget.volume = parseFloat(e.target.value); quickTarget.synth.volume.value = quickTarget.volume; }
+        });
+
+        // ---- Full edit popup ----
+        function saveEdit() {
+            if (editingPulsar) {
+                const freq = parseFloat(document.getElementById('frequencyInput').value);
+                const reps = parseInt(document.getElementById('repetitionInput').value);
+                const vol = parseFloat(document.getElementById('volumeInput').value);
+                editingPulsar.updateSettings(freq, reps, vol);
+            }
+            closePopup();
+        }
+        function closePopup() { popup.style.display = 'none'; editingPulsar = null; }
+        function deletePulsar() {
+            if (editingPulsar) {
+                const i = pulsars.indexOf(editingPulsar);
+                if (i > -1) { editingPulsar.destroy(); pulsars.splice(i, 1); }
+            }
+            closePopup();
+        }
+
+        function clearAll() { pulsars.forEach(p => p.destroy()); pulsars = []; }
+        function toggleMute() { muted = !muted; }
+
+        // ---- Save / Load / Export ----
+        let memorySave = null; // last-resort copy kept for this session
+
+        function collectProject() {
+            return pulsars.map(p => ({ type: p.type, x: p.x, y: p.y, frequency: p.frequency, repetitions: p.repetitions, volume: p.volume }));
+        }
+
+        async function applyProject(data) {
+            await startAudio();
+            clearAll();
+            data.forEach(d => pulsars.push(new Pulsar(d.x, d.y, d.type, d.frequency, d.repetitions, d.volume)));
+        }
+
+        function downloadProjectFile(json) {
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'pulsar-project.json';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+        }
+
+        async function saveProject() {
+            const json = JSON.stringify(collectProject());
+            memorySave = json;
+            let stored = false;
+            try {
+                if (window.storage && window.storage.set) {
+                    const result = await window.storage.set('pulsar-freeform-project', json, false);
+                    stored = !!result;
+                }
+            } catch (err) { stored = false; }
+
+            let downloaded = false;
+            try { downloadProjectFile(json); downloaded = true; } catch (err) { downloaded = false; }
+
+            if (stored && downloaded) showToast('Project saved (backup file downloaded too)');
+            else if (stored) showToast('Project saved!');
+            else if (downloaded) showToast('Saved as pulsar-project.json — use Open File to reload it');
+            else showToast('Saved for this session only — Load will restore it until you close the page');
+        }
+
+        async function loadProject() {
+            try {
+                if (window.storage && window.storage.get) {
+                    const result = await window.storage.get('pulsar-freeform-project', false);
+                    if (result && result.value) {
+                        await applyProject(JSON.parse(result.value));
+                        showToast('Project loaded!');
+                        return;
+                    }
+                }
+            } catch (err) { /* fall through to session copy */ }
+
+            if (memorySave) {
+                await applyProject(JSON.parse(memorySave));
+                showToast('Project loaded from this session');
+            } else {
+                showToast('No saved project found — try Open File to load a .json');
+            }
+        }
+
+        function openProjectFile() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json,application/json';
+            input.addEventListener('change', () => {
+                const file = input.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = async (evt) => {
+                    try {
+                        await applyProject(JSON.parse(evt.target.result));
+                        showToast('Project loaded from file!');
+                    } catch (err) { showToast('That file is not a valid pulsar project.'); }
+                };
+                reader.onerror = () => showToast('Could not read that file.');
+                reader.readAsText(file);
+            });
+            input.click();
+        }
+
+        function exportImage() {
+            const link = document.createElement('a');
+            link.download = 'pulsar-composition.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            showToast('Image exported!');
+        }
+
+        function animate() {
+            ctx.fillStyle = 'rgba(0,0,10,1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'white';
+            stars.forEach(star => { ctx.globalAlpha = star.brightness; ctx.fillRect(star.x, star.y, star.size, star.size); });
+            ctx.globalAlpha = 1;
+            pulsars.forEach(p => p.draw());
+            requestAnimationFrame(animate);
+        }
+        animate();
+    </script>
+</body>
+</html>
